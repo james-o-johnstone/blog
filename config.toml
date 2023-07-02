@@ -1,0 +1,4 @@
+baseURL = "https://www.runningcode.co.uk"
+languageCode = "en-us"
+title = "Running Code"
+theme: "PaperMod"
