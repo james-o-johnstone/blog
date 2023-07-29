@@ -1,6 +1,7 @@
 ---
 title: "Helm: Nil Pointer Error Accessing Global Variables in a Range Loop"
 date: 2023-07-03T15:12:19+01:00
+summary: "A short lesson in Helm variable scoping."
 draft: false
 ---
 

@@ -1,6 +1,7 @@
 ---
 title: "Java Performance"
-date: 2023-07-29:33:00+01:00
+date: 2023-07-29T09:57:25+01:00
+summary: "10 interesting new things I learned after reading the O'Reilly Java Performance book."
 draft: false
 ---
 
