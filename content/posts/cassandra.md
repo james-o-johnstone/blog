@@ -5,6 +5,12 @@ summary: "An overview of Apache Cassandra compaction, and how to correctly set d
 draft: false
 ---
 
+# TLDR
+
+Set disk alerts at 50% full rather than > 80% when running Cassandra in production as 50% disk space is required to run compactions.
+
+# Cassandra Storage Model
+
 Cassandra is a NoSQL database, the 'right choice when you need scalability and high availability without compromising performance'. It offers great performance, but self managing a Cassandra cluster really requires a deep understanding of how it works to avoid running into issues.
 
 Each table in Cassandra has a memtable and an SSTable (Sorted Strings Table).
@@ -19,9 +25,13 @@ So once this SSTable has been created, the memtable has been cleared, the commit
 
 If there are many write operations occuring then there are going to be many SSTables, and if there are a lot of updates/deletions happening then these SSTables could get large and be filled with tombstones and intermediate state. When reading data there's no point in storing this intermediate state, no point in storing deleted rows any more, so there's another process that merges SSTables together into a single table, "summarising" the data so that it reflects the final state. This process is called compaction.
 
+# Compaction
+
 In compaction, the newest values for updated keys are written to a new SSTable, and deleted keys aren't carried over to the new SSTable.
 
 Compaction requires disk space - enough disk space to store the old data, and the new data, at the same time. If there's not enough space then compaction can't occur.
+
+# The Big Problem
 
 This is where you can run into trouble without realising it. You might set a free disk alert to fire when disk space is > 90% for most cases, but with Cassandra, this alert needs to occur before 50% disk usage, because once you have surpassed that threshold, compactions can no longer occur. Depending on which Cassandra version you are on, they can also fail silently.
 
