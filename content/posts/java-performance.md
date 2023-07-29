@@ -1,6 +1,6 @@
 ---
 title: "Java Performance"
-date: 2023-07-04T08:33:00+01:00
+date: 2023-07-29:33:00+01:00
 draft: false
 ---
 
@@ -27,7 +27,7 @@ Similar to point 1, this point is around choosing smaller data types for instanc
 
 # 5. Synchronization
 
-Synchronization has performance overheads: firstly if a lock is contended then a thread must wait for the lock to be released, secondly when a thread leaves a synchronized block it must flush any modified variables to main memory so that other threads can see updated values. This is an expensive operation called register flushing (a register is a fast memory location accessible to a specific thread), and the Java Memory Model requires this, so that all data from one thread becomes visible to another thread that synchronizes on the same lock.
+Synchronization has performance overheads: firstly if a lock is contended then a thread must wait for the lock to be released, secondly when a thread leaves a synchronized block it must flush any modified variables to main memory so that other threads can see updated values. This is an expensive operation called register flushing (a register is a fast memory location on a specific CPU), and the Java Memory Model requires this flushing so that all data from one thread becomes visible to another thread that synchronizes on the same lock.
 
 To get around the performance overheads of synchronization, consider avoiding synchronization altogether by restructuring code using `ThreadLocal` variables or CAS-based (Compare and Swap) alternatives e.g. `AtomicLong`, `AtomicReference` etc.
 
