@@ -1,6 +1,7 @@
 ---
 title: "Stripe Billing Integration for Garmin (Connect IQ) Apps: Part 1"
 date: 2023-07-02T16:59:46+01:00
+summary: "How I implemented stripe billing for my Garmin app [Humin](https://apps.garmin.com/en-US/apps/5ed9382a-6f47-419d-a21c-fb72b725842b)."
 draft: false
 ---
 
