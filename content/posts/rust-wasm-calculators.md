@@ -1,5 +1,5 @@
 ---
-title: "Running Calculators Implemented In Rust Using WebAssembly"
+title: "Calculators for Running (Implemented In Rust Using WebAssembly)"
 date: 2024-01-28T14:58:22Z
 summary: "Some calculators I use for running, in the format I wanted on a single page. The underlying calculations are performed in Rust."
 draft: false
