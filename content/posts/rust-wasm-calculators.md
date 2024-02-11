@@ -1,7 +1,7 @@
 ---
 title: "Running Calculators Implemented In Rust Using WebAssembly"
 date: 2024-01-28T14:58:22Z
-summary: "Some calculators I used for running, in the format I wanted on a single page. The underlying calculations are performed in Rust."
+summary: "Some calculators I use for running, in the format I wanted on a single page. The underlying calculations are performed in Rust."
 draft: false
 ---
 
@@ -26,7 +26,7 @@ table.hidden {
 <table id=paceTable>
   <tr>
     <td>Pace</td>
-    <td><input id="paceCalcPace" placeholder="mm:ss" type="string" name="pace"</td>
+    <td><input id="paceCalcPace" placeholder="mm:ss" type="string" name="pace" size="5"></td>
     <td>
         <select name="unit" id="paceCalcUnit">
           <option value="kms">per km</option>
@@ -45,7 +45,7 @@ table.hidden {
 <table class="hidden" id=distanceTable>
   <tr>
     <td>Pace</td>
-    <td><input id="distanceCalcPace" placeholder="mm:ss" type="string" name="pace"</td>
+    <td><input id="distanceCalcPace" placeholder="mm:ss" type="string" name="pace" size="5"></td>
     <td>
         <select name="unit" id="distanceCalcUnit">
           <option value="km">per km</option>
@@ -55,7 +55,7 @@ table.hidden {
   </tr>
   <tr>
     <td>Time</td>
-    <td><input id="distanceCalcTime" placeholder="hh:mm:ss" type="string" name="time"></td>
+    <td><input id="distanceCalcTime" placeholder="hh:mm:ss" type="string" name="time" size="8"></td>
   </tr>
   <tr>
     <td>Result</td>
