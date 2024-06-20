@@ -7,7 +7,9 @@ draft: false
 
 # Introduction
 
-To improve my skills in Rust, learn more about how DNS works and eventually learn about Rust/Ruby and Rust/Java interop I have decided to follow along with https://implement-dns.wizardzines.com/ which I saw on Hackernews at some point, and reimplement the Python code in Rust with a plan to eventually create a library that I can call from Ruby and Java. Full credit is given to https://implement-dns.wizardzines.com for the original "Implement dns in a weekend" content, I am just following along here using Rust instead of Python.
+To improve my skills in Rust, learn more about how DNS works and eventually learn about Rust/Ruby and Rust/Java interop I have decided to follow along with https://implement-dns.wizardzines.com/ which I saw on Hackernews at some point, and reimplement the Python code in Rust with a plan to eventually create a library that I can call from Ruby and Java. 
+
+Full credit is given to https://implement-dns.wizardzines.com for the original "Implement dns in a weekend" content, I am just following along here using Rust instead of Python.
 
 The full repo is here: https://github.com/james-o-johnstone/rust-dns-in-a-weekend
 
@@ -70,7 +72,7 @@ impl ToBytes for String {
 }
 ```
 
-In order to implement the macros in `struct_bytes_derive`, I used the `syn` and `quote` crates to help with parsing and writing the Rust code. To help get me started I followed the [heapsize example](https://github.com/dtolnay/syn/blob/master/examples) to handle parsing for me.
+In order to implement the macros in `struct_bytes_derive`, I used the `syn` and `quote` crates to help with parsing and writing the Rust code. To help get me started I followed the syn [heapsize example](https://github.com/dtolnay/syn/blob/master/examples).
 
 My derive macro ended up looking like this:
 
