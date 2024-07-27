@@ -31,7 +31,7 @@ Here we need to do the reverse, converting bytes into a struct. Following the sa
 
 First I will implement the `FromBytes` trait for the datatypes we are using currently (`String` and `u16`). For convenience, I will use the [`bytebuffer`](https://docs.rs/bytebuffer/latest/bytebuffer/) crate to handle the logic for reading the correct amount of bytes for each datatype from a buffer, and keeping track of the position.
 
-Each `from_bytes` function will take a mutable reference to the buffer, it will read the bytes it needs and the buffer will then be passed to the next field in the struct.
+Each `from_bytes` function will take a mutable reference to the buffer as it will read the bytes it needs before being used by the next field in the struct.
 
 ```rust
 use bytebuffer::ByteReader;
@@ -52,7 +52,7 @@ impl FromBytes for String {
 }
 ```
 
-The `FromBytes` macro is implemented following the same pattern for the `ToBytes` macro (from part 1). However, instead of building a vector, this time we are building a struct like `Self { a: u16::to_bytes(buf), b: String::to_bytes(buf) }`.
+And then implement the `FromBytes` macro by following the same pattern for the `ToBytes` macro (from part 1). However, instead of building a vector, this time we are building a struct like `Self { a: u16::to_bytes(buf), b: String::to_bytes(buf) }`
 
 ```rust
 #[proc_macro_derive(FromBytes)]
@@ -166,7 +166,7 @@ Which prints:
 Ok("\u{3}www\u{7}example\u{3}com\0\0\u{1}\0\u{1}")
 ```
 
-So we need to parse this to a domain name (`www.example.com`). Here I will be implementing the "simple version" that doesn't quite work from the original book. I will add it to the `DNSQuestion` implementation, alongside the `encode_dns_name` function from part 1. 
+So we need to parse this to a domain name, implementing the "simple version" that doesn't quite work from the original book. I will add it to the `DNSQuestion` implementation, alongside the `encode_dns_name` function from part 1. 
 
 The new function looks like this:
 
@@ -190,7 +190,7 @@ fn decode_name_simple(buf: &mut ByteReader) -> String {
 
 # 2.4 Parse the question
 
-To use the new `decode_name_simple` function along with the `FromBytes` trait we will need to introduce a new `DNSName` struct and implement `FromBytes` for it so it can be automatically added to any structs that include a `DNSName`:
+To use the new `decode_name_simple` function along with the `FromBytes` trait we will need to introduce a new `DNSName` struct and implement `FromBytes` for it so it can be used with the macro:
 
 ```
 struct DNSName {
@@ -364,16 +364,16 @@ impl FromBytes for DNSPacket {
 
 # 2.9 Pretty print the IP Address
 
-For this we can use the rust stdlib: `use std::net::Ipv4Addr` to make things easier. `Ipv4Addr` already implements the `Display` trait, so no need to implement anything extra to pretty print the IP. I will introduce a new struct `DNSData` and repace the `data` field in the `DNSRecord` with this new type (this was previously a Vec::\<u8\>):
+For this we can use the rust stdlib: `use std::net::Ipv4Addr` to make things easier. `Ipv4Addr` already implements the `Display` trait, so no need to implement anything extra to pretty print the IP. I will introduce a new struct `DNSData` and repace the `data` field in the `DNSRecord` with this new type (this was previously a Vec<u8>):
 
 
 ```rust
 struct DNSRecord {
-    name: DNSName,
-    r#type: u16,
-    class: u16,
-    ttl: u32,
-    data: DNSData
+    name: DNSName, // domain name // could add custom function override here e.g. `decode_name_simple`
+    r#type: u16, // A, AAAA, MX, NS, TXT, etc (encoded as an integer)
+    class: u16, //  always the same (1). We’ll ignore this.
+    ttl: u32, //  how long to cache the query for. We’ll ignore this.
+    data: DNSData // the record’s content, like the IP address.
 }
 
 struct DNSData{
