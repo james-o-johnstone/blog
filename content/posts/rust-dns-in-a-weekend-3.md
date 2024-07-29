@@ -10,9 +10,9 @@ In this part we switch from sending queries to `8.8.8.8` to resolve the IP addre
 
 # 3.1: Don't ask for recursion
 
-Previously, we were making DNS requests to a recursive DNS resolver server so we set the `RECURSION_DESIRED` flag on the `DNSHeader``. Recursive DNS resolvers can either resolve the IP address from their cache or make recursive queries to other authoritative DNS servers to resolve the IP. Authoritative DNS servers are the sources of truth (they hold the actual DNS records that we need).
+Previously, we were making DNS requests to a recursive DNS resolver server so we set the `RECURSION_DESIRED` flag on the `DNSHeader`. Recursive DNS resolvers can either resolve the IP address from their cache or make recursive queries to other authoritative DNS servers to resolve the IP. Authoritative DNS servers are the sources of truth (they hold the actual DNS records that we need).
 
-Now we will be making a request to an authoritative DNS server instead, so we disable recursion by settings `flags = 0` on te header.
+Now we will be making a request to an authoritative DNS server instead, so we disable recursion by settings `flags = 0` on the header.
 
 # 3.2 Write a `send_query` function
 
@@ -63,7 +63,7 @@ First of all, as is shown in the Python code, we need to parse the `DNSData` dif
 - `A` records contain an IP address
 - `NS` records contain a DNS name
 
-To handle this in Rust, I have introduced a new `RecordType` trait, which contains an `ID` field and a default `parse_data` implementation which can be used to convert the `DNSData` bytes into a `String` without any further parsing.
+To handle this in Rust, I have introduced a new `RecordType` trait, which contains an `ID` field and a default `parse_data` implementation which can be used to convert the `DNSData` bytes into a `String` for pretty printing.
 
 ```rust
 trait RecordType {
@@ -190,6 +190,42 @@ Now the data can be printed as follows:
 let packet = DNSPacket::from_bytes(&mut br);
 println!("{}", packet.answers[0].data);
 ```
+
+As mentioned, I realise this is stupidly overcomplicated for this implementation, a much simpler approach would have been something like this:
+
+```rust
+const TYPE_A: u16 = 1;
+const TYPE_NS: u16 = 2;
+struct DNSRecord {
+    name: DNSName,
+    r#type: u16,
+    class: u16,
+    ttl: u32,
+    data: String
+}
+impl FromBytes for DNSRecord {
+    fn from_bytes(buf: &mut ByteReader) -> Self {
+        let name = DNSName::from_bytes(buf);
+        let r#type = u16::from_bytes(buf);
+        let class = u16::from_bytes(buf);
+        let ttl = u32::from_bytes(buf);
+        let data = match r#type {
+           TYPE_A => decode_name(buf),
+           TYPE_NS => ip_to_string(buf)
+           _ => panic!("Invalid type {}", r#type)
+        };
+        Self { 
+            name,
+            r#type,
+            class,
+            ttl,
+            data
+         }
+    }
+}
+```
+
+But then there would have been less rust learnings...
 
 {{< rawhtml >}}
 <iframe src="https://giphy.com/embed/11i77XHsbqUcZa" width="480" height="269" style="" frameBorder="0" class="giphy-embed" allowFullScreen></iframe><p><a href="https://giphy.com/gifs/i-regret-nothing-chicken-11i77XHsbqUcZa">via GIPHY</a></p>
