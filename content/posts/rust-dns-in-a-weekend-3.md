@@ -2,6 +2,7 @@
 title: "Implement DNS in a Weekend (in Rust!) Part 3"
 date: 2024-07-27T09:04:34+01:00
 draft: false
+summary: Part 3 of "Implement DNS in a weekend" - implementing the resolver.
 ---
 
 # Part 3: Implement our resolver
