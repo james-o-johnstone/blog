@@ -37,6 +37,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Pin Rust toolchain
+        run: |
+          rustup toolchain install 1.81.0 --target wasm32-unknown-unknown \
+          && rustup default 1.81.0
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh;
       - name: Build rust-wasm converters app
