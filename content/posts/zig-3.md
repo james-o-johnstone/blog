@@ -1,7 +1,7 @@
 ---
 title: "1.1 Memory-mapping GGUF tensor data in Zig"
 date: 2026-10-24T09:30:00+01:00
-draft: true
+draft: false
 description: "Decoding the Q4_K and Q6_K quantized block layouts from ggml, then mmapping a GGUF file in Zig and pointing each tensor at its data."
 ---
 

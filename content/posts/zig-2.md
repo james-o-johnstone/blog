@@ -2,15 +2,16 @@
 title: "1. Implementing a GGUF Parser in Zig"
 date: 2026-10-05T17:08:18+01:00
 draft: false
+description: "Learning Zig 0.16 by writing a parser for GGUF model files: strings, the new std.Io file APIs, tagged unions, allocators and catching a memory leak."
 ---
 
-[GGUF = GPT-Generated Unified Format](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+Part 1 of the [ZigLM series]({{< ref "zig-1.md" >}}). Repo: https://github.com/james-o-johnstone/ziglm
 
-Repo: https://github.com/james-o-johnstone/ziglm
-
-GGUF is a file format for storing models for inference with [GGML](https://huggingface.co/blog/introduction-to-ggml) which is a C/C++ ML library. The file contains the complete model definition including weights, tokenizer and architecture. We will start with loading this file as it is the first step to using a model for local inference. It's also a good first step for learning Zig fundamentals like types, IO, memory etc.
+[GGUF](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) is a file format for storing models for inference with [GGML](https://huggingface.co/blog/introduction-to-ggml) which is a C/C++ ML library. The file contains the complete model definition including weights, tokenizer and architecture. We will start with loading this file as it is the first step to using a model for local inference. It's also a good first step for learning Zig fundamentals like types, IO, memory etc.
 
 The layout of the file is here: [https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#file-structure](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#file-structure)
+
+## Strings and const
 
 Following along with the [zig-book](https://pedropark99.github.io/zig-book/Chapters/01-zig-weird.html), I started by running `zig init` and then creating a new `gguf.zig` file.
 
@@ -18,17 +19,17 @@ In this file I added a new function:
 
 `pub fn parse(filename: )`
 
-And here I reached my first hurdle, how to declare strings in Zig. Well turns out there is no built in string type, so we need to use primitives like C. In Zig, `[]u8` represents a slice of bytes, which can represent a string.
+And here I reached my first hurdle: how to declare strings in Zig. It turns out there is no built-in string type. In Zig, `[]u8` represents a slice of bytes, which can represent a string.
 
 `pub fn parse(filename: []u8)`
 
 And let's return nothing and try to print it:
 
-```
+```zig
 const std = @import("std");
 
 pub fn parse(filename: []u8) !void {
-    std.debug.print(filename);
+    std.debug.print("{s}\n", .{filename});
 }
 
 test "parse" {
@@ -40,7 +41,7 @@ Note the `!` before the return type here (`!void`) and also the `try`. There is 
 
 My first compiler error:
 
-```
+```text
 src/gguf.zig:8:15: error: expected type '[]u8', found '*const [8:0]u8'
     try parse("gguf.zig");
               ^~~~~~~~~~
@@ -49,9 +50,9 @@ src/gguf.zig:3:24: note: parameter type declared here
 pub fn parse(filename: []u8) !void {
 ```
 
-The problem here: `[]u8` represents a slice of bytes with mutable elements and the string literal "gguf.zig" is a `[]const u8` i.e. it is immutable.
+The problem here: `[]u8` represents a slice of bytes with mutable elements, but the string literal "gguf.zig" is a `*const [8:0]u8` (a pointer to a const, null-terminated array of 8 bytes). That coerces to `[]const u8` but not to `[]u8`:
 
-```
+```zig
 const std = @import("std");
 
 pub fn parse(filename: []const u8) !void {
@@ -63,7 +64,9 @@ test "parse" {
 }
 ```
 
-Next step: let's figure out how to load from a file. I got confused at this point, as most stuff online includes examples using `std.fs` but I found out that in zig 0.16.0 which was released Apr 2026, all these [File System APIs were migrated to Io](https://ziglang.org/download/0.16.0/release-notes.html#File-System). So instead of `std.fs.openFile`, I need to use `std.Io.Dir.openFile`.
+## File I/O with std.Io
+
+Next step: let's figure out how to load from a file. I got confused at this point, as most stuff online includes examples using `std.fs`, but I found out that in Zig 0.16.0, which was released Apr 2026, all these [File System APIs were migrated to Io](https://ziglang.org/download/0.16.0/release-notes.html#File-System). So instead of `std.fs.cwd().openFile`, I need to use `std.Io.Dir.openFile`.
 
 Now I also need to understand how `io` works, as the `std.Io.Dir.openFile` requires `io` to be passed as an arg. Checking [the PR](https://github.com/ziglang/zig/pull/25592) where io was first introduced in Zig it looks like io should be initialized once in `main` and used throughout the code. 
 
@@ -71,11 +74,11 @@ The example in the PR used `std.Io.Threaded`, a comment in the docs says the app
 
 I can pass it into my load function:
 
-```
+```zig
 pub fn load(io: std.Io, filename: []const u8) !void {
-    const file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch {
+    const file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch |err| {
         std.debug.print("Failed to open file: {s}\n", .{filename});
-        return;
+        return err;
     };
     std.debug.print("Successfully opened file: {s}\n", .{filename});
     defer file.close(io);
@@ -84,7 +87,7 @@ pub fn load(io: std.Io, filename: []const u8) !void {
 
 and call it:
 
-```
+```zig
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     try gguf.load(io, "test.txt");
@@ -93,7 +96,7 @@ pub fn main(init: std.process.Init) !void {
 
 Now to read text from the file into a variable. For this I found [zigbyexample](https://zigbyexample.neocities.org/text-io) useful as a starting point, it gives an example of how to read from a file and print. As we are eventually going to want to parse a gguf file, let's create a datatype to store the data in. Here I create a basic struct and extend the load method:
 
-```
+```zig
 const Gguf = struct {
     field: []const u8,
 
@@ -107,9 +110,9 @@ const Gguf = struct {
 };
 
 pub fn load(io: std.Io, filename: []const u8) !void {
-    var file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch {
+    var file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch |err| {
         std.debug.print("Failed to open file: {s}\n", .{filename});
-        return;
+        return err;
     };
     defer file.close(io);
     var buf: [4096]u8 = undefined;
@@ -123,9 +126,11 @@ pub fn load(io: std.Io, filename: []const u8) !void {
 }
 ```
 
-Now all the basic components are working, next step is to start writing the parser. Looking at the structure of a GGUF file [here](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#file-structure), the basic layout is:
+## Parsing the header
 
-```
+Now all the basic components are working, the next step is to start writing the parser. Looking at the structure of a GGUF file [here](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#file-structure), the basic layout is:
+
+```zig
 const Gguf = struct {
     magic: [4]u8,
     version: u32,
@@ -140,15 +145,15 @@ const Tensor = struct { name: []const u8, n_dimensions: u32, dimensions: []const
 
 To test it out, I've also downloaded an example gguf file for a simple model [TinyLlama-1.1B-Chat-v1.0](https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0) using `wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf`. Catting the file, I can see some of the metadata fields:
 
-```
+```text
 GGUFÉgeneral.architecturellamageneral.name"tinyllama_tinyllama-1.1b-chat-v1.0llama.context_lengthllama.embedding_lengthllama.block_countllama.feed_forward_lengthllama.rope.dimension_count@llama.attention.head_count llama.attention.head_count_kv&llama.attention.layer_norm_rms_epsilon¬Å'7llama.rope.freq_base@Fgeneral.file_typetokenizer.ggml.modelllamatokenizer.ggml.tokens	}
 ```
 
-I'll also need to switch the current `load` method to read bytes instead of text, using the [binary-io](https://zigbyexample.neocities.org/binary-io) example to help me. The [std.Io.reader](https://ziglang.org/documentation/0.16.0/std/#std.Io.Reader) interface also contains lots of functions for reading bytes from the stream into various types, e.g. `takeArray`, [`takeInt`](https://ziglang.org/documentation/master/std/#std.Io.Reader.takeInt). 
+I'll also need to switch the current `load` method to read bytes instead of text, using the [binary-io](https://zigbyexample.neocities.org/binary-io) example to help me. The [std.Io.Reader](https://ziglang.org/documentation/0.16.0/std/#std.Io.Reader) interface also contains lots of functions for reading bytes from the stream into various types, e.g. `takeArray`, [`takeInt`](https://ziglang.org/documentation/0.16.0/std/#std.Io.Reader.takeInt). 
 
-`takeArray` returns a `*[n]u8` i.e. it's a pointer to an array which points to a specific location in the 4096 byte buffer. On the next line, I dereference the pointer and copy the value with `const magic = m.*`. This is because we are reusing the same buffer to read the whole file, eventually the 4096 buffer will contain an entirely new set of bytes and data at that address would no longer be the same.
+`takeArray` returns a `*[n]u8` i.e. it's a pointer to an array which points to a specific location in the 4096 byte buffer. On the next line, I dereference the pointer and copy the value with `const magic = m.*`. This is because we are reusing the same buffer to read the whole file: eventually the 4096 byte buffer will contain an entirely new set of bytes and data at that address would no longer be the same.
 
-```
+```zig
 const Gguf = struct {
     const MAGIC = "GGUF";
     const VERSION = 3;
@@ -180,11 +185,11 @@ const Gguf = struct {
 
 The load function then becomes the following, notice I have used the `catch` instead of `try` here to handle the error in place and print a debug line:
 
-```
+```zig
 pub fn load(io: std.Io, filename: []const u8) !void {
-    var file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch {
+    var file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch |err| {
         std.debug.print("Failed to open file: {s}\n", .{filename});
-        return;
+        return err;
     };
     defer file.close(io);
     var gguf: Gguf = try Gguf.initFromFile(io, file);
@@ -192,20 +197,22 @@ pub fn load(io: std.Io, filename: []const u8) !void {
 }
 ```
 
-```
+```text
 % zig build run
 Magic: GGUF
 Version: 3
 ```
 
-Now I will continue parsing the remaining fields. Fleshing out the rest of the GGUF struct requires introducing a few more types as defined in the [spec](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md).
+## Metadata and tensors
+
+Now I will continue parsing the remaining fields. Fleshing out the rest of the GGUF struct requires introducing a few more types as defined in the spec.
 A lot of these structs are mechanical so I'm not going to repeat everything here but will document some interesting bits:
 
 - `Tensors` make up the meat of the GGUF. Each `Tensor` contains an `offset` to a position in the tensor data region of the file where that tensor's data is stored.
 - `GGMLType` is the type of the tensor, just looking at this shows that a GGML tensor can be one of [many types](https://github.com/james-o-johnstone/ziglm/blob/e865f6a522d2a4bc83c0414d7d6a849ef2fe163c/src/gguf.zig#L15).
 - `GgufMetadataKvT` - the model metadata contains string keys mapped to many types from simple strings e.g. "general.architecture": "llama", [to arrays](https://github.com/james-o-johnstone/ziglm/blob/e865f6a522d2a4bc83c0414d7d6a849ef2fe163c/src/gguf.zig#L129) (which can themselves also contain arrays).
 
-```
+```zig
 const Gguf = struct {
     const MAGIC = "GGUF";
     const VERSION = 3;
@@ -259,14 +266,14 @@ const GgufMetadataValue = union(GgufMetadataValueType) {
 
 The `GgufMetadataValue` can be one of many `GgufMetadataValueType`, which can be expressed in Zig using a [tagged union](https://zig.guide/language-basics/unions/). The tag in this case is the `GgufMetadataValueType` enum which indicates which of the fields within the `GgufMetadataValue` union is active. The full implementation requires a switch to handle each of those types being active within the union:
 
-```
+```zig
 const GgufMetadataValue = union(GgufMetadataValueType) {
     GGUF_METADATA_VALUE_TYPE_UINT8: u8,
     GGUF_METADATA_VALUE_TYPE_INT8: i8,
     GGUF_METADATA_VALUE_TYPE_UINT16: u16,
     GGUF_METADATA_VALUE_TYPE_INT16: i16,
 
-    fn parse(reader: *std.Io.Reader, value_type: GgufMetadataValueType) !GgufMetadataValue {
+    fn parse(reader: *std.Io.Reader, value_type: GgufMetadataValueType, allocator: std.mem.Allocator) GGUFParseError!GgufMetadataValue {
         switch (value_type) {
             .GGUF_METADATA_VALUE_TYPE_UINT8 => {
                 const value = try reader.takeInt(u8, .little);
@@ -282,13 +289,30 @@ const GgufMetadataValue = union(GgufMetadataValueType) {
 };
 ```
 
+Notice the return type is `GGUFParseError!GgufMetadataValue` rather than just `!GgufMetadataValue`. A value can be an array of values, so `GgufMetadataValue.parse` and `GgufArray.parse` (below) call each other, and Zig can't infer the error set of mutually recursive functions. So I declared the error set explicitly:
+
+```zig
+const GGUFParseError = error{
+    ArrayTooLong,
+    BufferTooSmall,
+    EndOfStream,
+    InvalidEnumTag,
+    InvalidValueType,
+    OutOfMemory,
+    ReadFailed,
+    StringTooLong,
+};
+```
+
+## Allocators
+
 `GgufMetadataValueType` can also be an array, so now is also a good time to mention allocators in Zig.
 
 There are a few different allocators to choose from (including the c allocator: `std.heap.c_allocator`), and it is also possible to implement a custom allocator. 
 
-From the docs on [choosing an allocator](https://ziglang.org/documentation/0.16.0/#Choosing-an-Allocator) I decided to start with the general purpose allocator (gpa), which in debug builds is a `DebugAllocator`, the "safe allocator" (the switch can be seen in `std/start.zig` [here](https://codeberg.org/ziglang/zig/src/branch/master/lib/std/start.zig#L781)). This is a good starting point for development as it can detect memory issues by tracking every allocation in the program.
+From the docs on [choosing an allocator](https://ziglang.org/documentation/0.16.0/#Choosing-an-Allocator) I decided to start with the general purpose allocator (gpa), which in debug builds is a `DebugAllocator`, the "safe allocator" (the switch can be seen in `std/start.zig` [here](https://codeberg.org/ziglang/zig/src/tag/0.16.0/lib/std/start.zig#L689-L713)). This is a good starting point for development as it can detect memory issues by tracking every allocation in the program.
 
-The [std.mem.Allocator](https://ziglang.org/documentation/master/std/#std.mem.Allocator) interface provides
+The [std.mem.Allocator](https://ziglang.org/documentation/0.16.0/std/#std.mem.Allocator) interface provides
 
 `pub fn alloc(self: Allocator, comptime T: type, n: usize) Error![]T`: Allocates an array of `n` items of type `T` and sets all the items to `undefined`
 
@@ -298,7 +322,7 @@ and
 
 The guidance in the docs is to create the gpa once in the `main` function and then pass it around:
 
-```
+```zig
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const allocator = init.gpa;
@@ -306,17 +330,18 @@ pub fn main(init: std.process.Init) !void {
 }
 ```
 
-I created a `GgufArray` struct and added calls to `alloc` and `free`  to show how they are used:
+I created a `GgufArray` struct and added calls to `alloc` and `free` to show how they are used. The array length comes from the file, so it is capped before allocating:
 
-```
+```zig
 const GgufArray = struct {
     type: GgufMetadataValueType,
     len: u64,
     array: []const GgufMetadataValue,
 
-    fn parse(reader: *std.Io.Reader, allocator: std.mem.Allocator) !GgufArray {
+    fn parse(reader: *std.Io.Reader, allocator: std.mem.Allocator) GGUFParseError!GgufArray {
         const value_type = try reader.takeEnum(GgufMetadataValueType, .little);
         const len = try reader.takeInt(u64, .little);
+        if (len > MAX_ARRAY_LEN) return error.ArrayTooLong;
 
         const arr = try allocator.alloc(GgufMetadataValue, len);
         var parsed: usize = 0;
@@ -344,7 +369,7 @@ const GgufArray = struct {
 
 Allocators are also used for things like `std.ArrayList`, e.g. for the tensors:
 
-```
+```zig
 var tensors = std.ArrayList(Tensor).empty;
 errdefer {
     for (tensors.items) |*t| t.deinit(allocator);
@@ -357,11 +382,11 @@ for (0..tensor_count) |_| {
 }
 ```
 
-There is no GC in Zig so nothing automatically frees memory when it goes out of scope, we need to remember to call `free` on everything that was allocated. Zig's `defer`/`errdefer` can handle this as it is guaranteed to run when the scope exits.
+There is no GC in Zig so nothing automatically frees memory when it goes out of scope: we need to remember to call `free` on everything that was allocated. Zig's `defer` and `errdefer` help here: `defer` runs whenever the scope exits, and `errdefer` only when it exits with an error.
 
 So on the `Gguf` struct I added a `deinit` method which walks everything that it created to ensure it is freed:
 
-```
+```zig
 pub fn deinit(self: *Gguf, allocator: std.mem.Allocator) void {
     var it = self.metadata.iterator();
     while (it.next()) |entry| {
@@ -377,11 +402,11 @@ pub fn deinit(self: *Gguf, allocator: std.mem.Allocator) void {
 
 Then in the `load` method which parses the file, we just need to call `defer gguf.deinit(allocator)` and the resources will be freed. Note that currently we are only printing the gguf in that `load` function and the gguf lifetime is tied to that function. When we want to use the gguf elsewhere in the program, we will need to move the defer up to the caller.
 
-```
+```zig
 pub fn load(io: std.Io, allocator: std.mem.Allocator, filename: []const u8) !void {
-    var file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch {
+    var file = std.Io.Dir.cwd().openFile(io, filename, .{}) catch |err| {
         std.debug.print("Failed to open file: {s}\n", .{filename});
-        return;
+        return err;
     };
     defer file.close(io);
     var gguf = try Gguf.initFromFile(io, allocator, file);
@@ -390,9 +415,11 @@ pub fn load(io: std.Io, allocator: std.mem.Allocator, filename: []const u8) !voi
 }
 ```
 
-Here the benefit of starting with the gpa allocator paid off. When I was implementing the `Tensor` parsing, I forgot to free the `dimensions` array, resulting in a runtime error:
+## Catching a leak
 
-```
+Here the benefit of starting with the gpa allocator paid off. When I was implementing the `Tensor` parsing, I forgot to free the `dimensions` array, and the `DebugAllocator` reported the leak on exit:
+
+```text
 error(DebugAllocator): memory address 0x109020300 leaked:
 ziglm/src/gguf.zig:88:47: 0x100d0e21f in parse (ziglm)
         const dimensions = try allocator.alloc(u64, n_dimensions);
@@ -406,12 +433,14 @@ ziglm/src/gguf.zig:409:37: 0x100d0f88b in load (ziglm)
 
 So a leak like this would not be detected with non-debug/testing allocators, leading to some silent issues at runtime.
 
-The full gguf.zig file can be seen [here](https://github.com/james-o-johnstone/ziglm/blob/main/src/gguf.zig).
+The full gguf.zig file can be seen [here](https://github.com/james-o-johnstone/ziglm/blob/e865f6a522d2a4bc83c0414d7d6a849ef2fe163c/src/gguf.zig).
 
-The next thing to do is mmap the tensor data. The file we are testing with is ~638MiB however the parts we have parsed so far make up only ~1.6MiB of that so the majority of the data has not been read yet. We need to mmap the tensor data so we get a pointer to the bytes in the page cache (the kernel's in memory cache of the file) rather than needing to make a second copy in RAM. 
+## Next: mmap
 
-The model we are using here is just a small 1.1B parameter model so it could comfortably fit multiple copies, but if we look at some [gemma-4-31B](https://huggingface.co/unsloth/gemma-4-31B-it-GGUF/tree/main) GGUFs then they can reach 30-40GiB.
+The next thing to do is mmap the tensor data. The file we are testing with is ~638MiB, however the parts we have parsed so far make up only ~1.6MiB of that so the majority of the data has not been read yet. We need to mmap the tensor data so we get a pointer to the bytes in the page cache (the kernel's in memory cache of the file) rather than needing to make a second copy in RAM. 
 
-One other benefit of mmap is "lazy paging" i.e. the OS never reads the parts of the file that aren't touched, and they can be loaded on demand as needed.
+The model we are using here is just a small 1.1B parameter model so it could comfortably fit multiple copies, but if we look at some [gemma-4-31B](https://huggingface.co/unsloth/gemma-4-31B-it-GGUF/tree/main) GGUFs then they can reach tens of GiB.
+
+One other benefit of mmap is demand paging: the OS only reads the pages of the file that are touched (plus some readahead), loading them as needed.
 
 This mmap will be covered in the next post.
