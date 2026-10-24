@@ -1,4 +1,6 @@
 .tool-versions
 node_modules
-static
+static/*
+!static/images/
 target
+*.swp

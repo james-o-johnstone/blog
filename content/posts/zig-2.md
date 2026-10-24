@@ -9,7 +9,9 @@ Part 1 of the [ZigLM series]({{< ref "zig-1.md" >}}). Repo: https://github.com/j
 
 [GGUF](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) is a file format for storing models for inference with [GGML](https://huggingface.co/blog/introduction-to-ggml) which is a C/C++ ML library. The file contains the complete model definition including weights, tokenizer and architecture. We will start with loading this file as it is the first step to using a model for local inference. It's also a good first step for learning Zig fundamentals like types, IO, memory etc.
 
-The layout of the file is here: [https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#file-structure](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#file-structure)
+A simplified layout of the file (see the [spec](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#file-structure) for the full version):
+
+![GGUF file layout: a header (magic, version, tensor_count, metadata_kv_count), then the metadata key-values and tensor infos, padding, and the tensor data that each tensor info's offset points into](/images/gguf-layout.png)
 
 ## Strings and const
 
@@ -436,6 +438,10 @@ So a leak like this would not be detected with non-debug/testing allocators, lea
 The full gguf.zig file can be seen [here](https://github.com/james-o-johnstone/ziglm/blob/e865f6a522d2a4bc83c0414d7d6a849ef2fe163c/src/gguf.zig).
 
 ## Next: mmap
+
+Here's what we have parsed so far, and what's left:
+
+![GGUF file layout: the header, metadata and tensor info parsed so far, followed by the much larger tensor data region that the tensor offsets point into](/images/gguf-parsed-so-far.png)
 
 The next thing to do is mmap the tensor data. The file we are testing with is ~638MiB, however the parts we have parsed so far make up only ~1.6MiB of that so the majority of the data has not been read yet. We need to mmap the tensor data so we get a pointer to the bytes in the page cache (the kernel's in memory cache of the file) rather than needing to make a second copy in RAM. 
 

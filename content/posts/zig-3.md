@@ -51,6 +51,8 @@ K-quants are an optimization to get small block accuracy without as much overhea
 
 Looking at the second tensor in the file `token_embd.weight` it has 2048 x 32000 = 65,536,000 weights. With `Q4_K` quantization, the tensor is broken into super-blocks of 256 elements (`QK_K`), so 65,536,000 / 256 = 256,000 super-blocks.
 
+![Q4_K blocking: the tensor is split into 256-weight super-blocks; each super-block holds f16 d and dmin plus 8 sub-blocks of 32 weights, each with its own scale and min](/images/q4k-blocks.png)
+
 ## The Q4_K super-block
 
 Each of the tensor's super-blocks is represented as follows (taken from [ggml-common.h](https://github.com/ggml-org/ggml/blob/master/src/ggml-common.h) and converted to zig):
@@ -199,8 +201,7 @@ var mm = try file.createMemoryMap(io, .{
 defer mm.destroy(io);
 ```
 
-`mm.memory` is now a `[]const u8` covering the whole file. Because of the `defer`, the mapping only lives until the end of the function, and every tensor's `data` slice points into it. As with `deinit` in part 1, once we use the tensors outside `load`, the `mm.destroy` will need to move up to the caller.
-
+`mm.memory` is now a `[]const u8` covering the whole file.
 ## Finding the data region
 
 In [part 1]({{< ref "zig-2.md" >}}) the parser read the file through a streaming reader with a 4 KiB buffer. Now that the whole file is mapped, we can switch to a fixed reader over the mapped bytes, so that the reader's `seek` position is the position inside the file:
@@ -212,6 +213,8 @@ fn initFromMmap(allocator: std.mem.Allocator, memory: []const u8) !Gguf {
 ```
 
 After parsing the metadata and tensor info, `r.seek` is the number of bytes consumed from the start of the file. That nearly gets us to the start of the tensor data. However, we also need to consider the alignment of the gguf file, because the end of the tensor info section might not align with the start of the tensor data.
+
+![GGUF file layout with r.seek marked at the end of the tensor infos, and data_start after the padding at the next multiple of the alignment](/images/gguf-layout-seek.png)
 
 So we need to read the alignment of the file from the metadata, which [defaults to 32](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) if it isn't set:
 
